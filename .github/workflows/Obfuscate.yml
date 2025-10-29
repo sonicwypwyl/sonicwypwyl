@@ -1,3 +1,4 @@
+
 name: Build and Obfuscate BPB Panel
 
 on:
@@ -12,45 +13,32 @@ permissions:
 
 jobs:
   build:
-    # 如果触发者是 github-actions 机器人，则跳过（避免自动提交导致的回环）
     if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
-          node-version: "18"   # 推荐使用稳定 LTS 版本而不是 latest
+          node-version: "18"
 
       - name: 安装依赖项
-        run: |
-          set -x
-          npm install -g javascript-obfuscator
+        run: npm install -g javascript-obfuscator
 
-      - name: 下载 BPB worker.js（带重试与详细日志）
+      - name: 下载 BPB worker.js
         env:
           TARGET_URL: https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/build/unobfuscated-worker.js
         run: |
           set -x
           echo "Downloading from: $TARGET_URL"
-          # 使用 curl -fSL 可以在非2xx时返回非0，便于CI失败并在日志看到 HTTP 状态
-          curl -fSL --retry 5 --retry-delay 3 --connect-timeout 10 -o origin.js "$TARGET_URL" || (echo "Download failed, dumping DNS and curl info:" && nslookup raw.githubusercontent.com || true && curl -v --show-error --fail --silent "$TARGET_URL" || true && exit 1)
-
-      - name: 显示文件信息（便于日志排查）
-        run: |
-          set -x
-          ls -lah origin.js || true
-          file origin.js || true
-          head -n 40 origin.js || true
+          curl -fSL --retry 5 --retry-delay 3 --connect-timeout 10 \
+            -o origin.js "$TARGET_URL"
 
       - name: 混淆 BPB worker.js
         run: |
-          set -x
           javascript-obfuscator origin.js --output _worker.js \
             --compact true \
             --control-flow-flattening false \
@@ -65,10 +53,6 @@ jobs:
 
       - name: 提交更改
         uses: stefanzweifel/git-auto-commit-action@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           branch: main
           commit_message: ':arrow_up: 更新最新的 BPB 面板'
-          commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
-          push_options: '--set-upstream'
